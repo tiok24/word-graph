@@ -22,7 +22,7 @@ nltk.download("words")
 STOP_WORDS = set(stopwords.words("english"))
 ENGLISH_WORDS = set(nltk_words.words("en"))
 
-def preprocess_sentence(sentence):
+def preprocess_sentence(sentence: str):
     tokens = word_tokenize(sentence)
     tokens = [t.lower() for t in tokens if t.isalpha()]
     tokens = [t for t in tokens if len(t) > 2]
@@ -34,7 +34,7 @@ def preprocess_sentence(sentence):
 # UI
 # =====================
 st.set_page_config(layout="wide")
-st.title("📊 Word Graph NLP")
+st.title("📊 Word Graph NLP — PageRank & Community Detection")
 
 if "pdf_text" not in st.session_state:
     st.warning("⚠️ Silakan upload PDF terlebih dahulu di halaman utama.")
@@ -53,25 +53,11 @@ bigrams = list(ngrams(tokens, 2))
 bigram_freq = Counter(bigrams)
 
 # =====================
-# SIDEBAR CONTROLS
-# =====================
-st.sidebar.header("⚙️ Pengaturan Visualisasi")
-
-max_weight = max(bigram_freq.values()) if bigram_freq else 1
-threshold = st.sidebar.slider(
-    "Threshold Edge Weight (0 = semua node)",
-    min_value=0,
-    max_value=max_weight,
-    value=0
-)
-
-# =====================
-# BUILD GRAPH
+# BUILD WORD GRAPH
 # =====================
 G = nx.Graph()
 for (w1, w2), freq in bigram_freq.items():
-    if freq >= threshold:
-        G.add_edge(w1, w2, weight=freq)
+    G.add_edge(w1, w2, weight=freq)
 
 # =====================
 # 1️⃣ DATA UNDERSTANDING
@@ -79,19 +65,18 @@ for (w1, w2), freq in bigram_freq.items():
 st.subheader("1️⃣ Data Understanding")
 
 col1, col2, col3 = st.columns(3)
-col1.metric("Total Tokens", len(tokens))
+col1.metric("Total Tokens (Unigram)", len(tokens))
 col2.metric("Unique Tokens", len(set(tokens)))
-col3.metric("Total Bigrams", len(bigram_freq))
+col3.metric("Total Bigram Edges", len(bigram_freq))
 
 # =====================
-# 2️⃣ PREVIEW SUB-MATRIX CO-OCCURRENCE
+# 2️⃣ PREVIEW CO-OCCURRENCE SUB-MATRIX
 # =====================
 st.subheader("2️⃣ Preview Sub-Matriks Co-occurrence (Bigram)")
 
 top_words = [w for w, _ in Counter(tokens).most_common(10)]
 
 co_matrix = pd.DataFrame(0, index=top_words, columns=top_words)
-
 for (w1, w2), freq in bigram_freq.items():
     if w1 in top_words and w2 in top_words:
         co_matrix.loc[w1, w2] = freq
@@ -103,7 +88,7 @@ st.dataframe(co_matrix)
 # =====================
 st.subheader("3️⃣ Top PageRank Words")
 
-pagerank = nx.pagerank_numpy(G, weight="weight")
+pagerank = nx.pagerank(G, weight="weight", max_iter=200)
 
 pr_df = (
     pd.DataFrame(pagerank.items(), columns=["Word", "PageRank"])
@@ -114,9 +99,9 @@ pr_df = (
 st.dataframe(pr_df)
 
 # =====================
-# 4️⃣ WORD GRAPH (PAGERANK)
+# 4️⃣ WORD GRAPH PAGERANK
 # =====================
-st.subheader("4️⃣ Word Graph PageRank (All Nodes)")
+st.subheader("4️⃣ Word Graph PageRank")
 
 pos = nx.spring_layout(G, k=0.15, seed=42)
 
@@ -134,24 +119,19 @@ nx.draw_networkx_nodes(
 )
 nx.draw_networkx_edges(G, pos, alpha=0.15, ax=ax1)
 
-ax1.set_title("Node Size = PageRank")
+ax1.set_title("Word Graph based on PageRank")
 ax1.axis("off")
 st.pyplot(fig1)
 
 # =====================
-# 5️⃣ COMMUNITY GRAPH (LOUVAIN)
+# 5️⃣ WORD GRAPH COMMUNITY (LOUVAIN)
 # =====================
-st.subheader("5️⃣ Community Graph (Louvain)")
+st.subheader("5️⃣ Word Graph Community (Louvain)")
 
 communities = nx_comm.louvain_communities(G, weight="weight")
 main_community = max(communities, key=len)
 
-community_map = {}
-for i, c in enumerate(communities):
-    for node in c:
-        community_map[node] = i
-
-colors = [
+node_colors = [
     "red" if n in main_community else "lightgray"
     for n in G.nodes()
 ]
@@ -160,13 +140,13 @@ fig2, ax2 = plt.subplots(figsize=(14, 14))
 
 nx.draw_networkx_nodes(
     G, pos,
-    node_color=colors,
+    node_color=node_colors,
     node_size=node_sizes,
     alpha=0.85,
     ax=ax2
 )
 nx.draw_networkx_edges(G, pos, alpha=0.15, ax=ax2)
 
-ax2.set_title("Red = Main Community (Louvain)")
+ax2.set_title("Word Graph Community Detection (Louvain)")
 ax2.axis("off")
 st.pyplot(fig2)
