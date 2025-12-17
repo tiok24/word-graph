@@ -34,7 +34,7 @@ def preprocess_sentence(sentence):
 # UI
 # =====================
 st.set_page_config(layout="wide")
-st.title("📊 Word Graph NLP — Bigram-Based Analysis")
+st.title("📊 Word Graph NLP")
 
 if "pdf_text" not in st.session_state:
     st.warning("⚠️ Silakan upload PDF terlebih dahulu di halaman utama.")
