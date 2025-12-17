@@ -2,6 +2,6 @@ streamlit
 PyMuPDF
 nltk
 networkx
-pandas
 matplotlib
 numpy
+scipy
