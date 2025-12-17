@@ -8,8 +8,6 @@ import pandas as pd
 from nltk.tokenize import sent_tokenize, word_tokenize
 from nltk.util import ngrams
 from nltk.corpus import stopwords, words as nltk_words
-from collections import Counter
-import networkx.algorithms.community as nx_comm
 
 # =====================
 # NLTK SETUP (WAJIB)
@@ -34,7 +32,7 @@ def preprocess_sentence(sentence: str):
 # UI
 # =====================
 st.set_page_config(layout="wide")
-st.title("📊 Word Graph NLP — PageRank & Community Detection")
+st.title("📈 Unigram vs Bigram — Centrality Comparison")
 
 if "pdf_text" not in st.session_state:
     st.warning("⚠️ Silakan upload PDF terlebih dahulu di halaman utama.")
@@ -45,108 +43,118 @@ if "pdf_text" not in st.session_state:
 # =====================
 sentences = sent_tokenize(st.session_state["pdf_text"])
 
-tokens = []
+tokens_by_sentence = []
 for s in sentences:
-    tokens.extend(preprocess_sentence(s))
+    tokens_by_sentence.append(preprocess_sentence(s))
 
-bigrams = list(ngrams(tokens, 2))
-bigram_freq = Counter(bigrams)
+# UNIGRAM TOKENS
+tokens_uni = [w for sent in tokens_by_sentence for w in sent]
+
+# BIGRAM TOKENS (within sentence)
+bigrams = []
+for sent in tokens_by_sentence:
+    bigrams.extend(list(ngrams(sent, 2)))
 
 # =====================
-# BUILD WORD GRAPH
+# BUILD GRAPHS
 # =====================
-G = nx.Graph()
-for (w1, w2), freq in bigram_freq.items():
-    G.add_edge(w1, w2, weight=freq)
+# UNIGRAM GRAPH
+G_uni = nx.Graph()
+for i in range(len(tokens_uni) - 1):
+    G_uni.add_edge(tokens_uni[i], tokens_uni[i + 1])
+
+# BIGRAM GRAPH
+G_bi = nx.Graph()
+for w1, w2 in bigrams:
+    if G_bi.has_edge(w1, w2):
+        G_bi[w1][w2]["weight"] += 1
+    else:
+        G_bi.add_edge(w1, w2, weight=1)
+
+# =====================
+# CENTRALITY METRICS
+# =====================
+def pagerank_safe(G):
+    return nx.pagerank(G, weight="weight", max_iter=200)
+
+metrics = {
+    "PageRank": pagerank_safe,
+    "Degree": nx.degree_centrality,
+    "Betweenness": lambda G: nx.betweenness_centrality(G, weight="weight")
+}
 
 # =====================
 # 1️⃣ DATA UNDERSTANDING
 # =====================
 st.subheader("1️⃣ Data Understanding")
 
-col1, col2, col3 = st.columns(3)
-col1.metric("Total Tokens (Unigram)", len(tokens))
-col2.metric("Unique Tokens", len(set(tokens)))
-col3.metric("Total Bigram Edges", len(bigram_freq))
+c1, c2 = st.columns(2)
+with c1:
+    st.markdown("### 🔹 Unigram Graph")
+    st.write("Nodes:", G_uni.number_of_nodes())
+    st.write("Edges:", G_uni.number_of_edges())
+
+with c2:
+    st.markdown("### 🔹 Bigram Graph")
+    st.write("Nodes:", G_bi.number_of_nodes())
+    st.write("Edges:", G_bi.number_of_edges())
 
 # =====================
-# 2️⃣ PREVIEW CO-OCCURRENCE SUB-MATRIX
+# 2️⃣ TOP-10 CENTRALITY TABLES
 # =====================
-st.subheader("2️⃣ Preview Sub-Matriks Co-occurrence (Bigram)")
+st.subheader("2️⃣ Top-10 Central Words (Unigram vs Bigram)")
 
-top_words = [w for w, _ in Counter(tokens).most_common(10)]
+for metric_name, metric_func in metrics.items():
+    st.markdown(f"### 🔸 {metric_name}")
 
-co_matrix = pd.DataFrame(0, index=top_words, columns=top_words)
-for (w1, w2), freq in bigram_freq.items():
-    if w1 in top_words and w2 in top_words:
-        co_matrix.loc[w1, w2] = freq
+    cent_uni = metric_func(G_uni)
+    cent_bi = metric_func(G_bi)
 
-st.dataframe(co_matrix)
+    df_uni = (
+        pd.DataFrame(cent_uni.items(), columns=["Word", metric_name])
+        .sort_values(metric_name, ascending=False)
+        .head(10)
+    )
 
-# =====================
-# 3️⃣ TOP PAGERANK WORDS
-# =====================
-st.subheader("3️⃣ Top PageRank Words")
+    df_bi = (
+        pd.DataFrame(cent_bi.items(), columns=["Word", metric_name])
+        .sort_values(metric_name, ascending=False)
+        .head(10)
+    )
 
-pagerank = nx.pagerank(G, weight="weight", max_iter=200)
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("**Unigram**")
+        st.dataframe(df_uni)
 
-pr_df = (
-    pd.DataFrame(pagerank.items(), columns=["Word", "PageRank"])
-    .sort_values("PageRank", ascending=False)
-    .head(10)
-)
-
-st.dataframe(pr_df)
-
-# =====================
-# 4️⃣ WORD GRAPH PAGERANK
-# =====================
-st.subheader("4️⃣ Word Graph PageRank")
-
-pos = nx.spring_layout(G, k=0.15, seed=42)
-
-pr_values = np.array(list(pagerank.values()))
-pr_norm = (pr_values - pr_values.min()) / (pr_values.max() - pr_values.min() + 1e-9)
-node_sizes = 400 + pr_norm * 3500
-
-fig1, ax1 = plt.subplots(figsize=(14, 14))
-
-nx.draw_networkx_nodes(
-    G, pos,
-    node_size=node_sizes,
-    alpha=0.8,
-    ax=ax1
-)
-nx.draw_networkx_edges(G, pos, alpha=0.15, ax=ax1)
-
-ax1.set_title("Word Graph based on PageRank")
-ax1.axis("off")
-st.pyplot(fig1)
+    with col2:
+        st.markdown("**Bigram**")
+        st.dataframe(df_bi)
 
 # =====================
-# 5️⃣ WORD GRAPH COMMUNITY (LOUVAIN)
+# 3️⃣ GRAPH VISUALIZATION
 # =====================
-st.subheader("5️⃣ Word Graph Community (Louvain)")
+st.subheader("3️⃣ Graph Visualization")
 
-communities = nx_comm.louvain_communities(G, weight="weight")
-main_community = max(communities, key=len)
+def draw_graph(G, centrality, title, ax):
+    pos = nx.spring_layout(G, seed=42)
+    values = np.array(list(centrality.values()))
+    sizes = 400 + (values - values.min()) / (values.max() - values.min() + 1e-9) * 3000
 
-node_colors = [
-    "red" if n in main_community else "lightgray"
-    for n in G.nodes()
-]
+    nx.draw_networkx_nodes(G, pos, node_size=sizes, alpha=0.8, ax=ax)
+    nx.draw_networkx_edges(G, pos, alpha=0.15, ax=ax)
+    ax.set_title(title)
+    ax.axis("off")
 
-fig2, ax2 = plt.subplots(figsize=(14, 14))
+for metric_name, metric_func in metrics.items():
+    st.markdown(f"### 🔸 {metric_name} Graph")
 
-nx.draw_networkx_nodes(
-    G, pos,
-    node_color=node_colors,
-    node_size=node_sizes,
-    alpha=0.85,
-    ax=ax2
-)
-nx.draw_networkx_edges(G, pos, alpha=0.15, ax=ax2)
+    cent_uni = metric_func(G_uni)
+    cent_bi = metric_func(G_bi)
 
-ax2.set_title("Word Graph Community Detection (Louvain)")
-ax2.axis("off")
-st.pyplot(fig2)
+    fig, ax = plt.subplots(1, 2, figsize=(22, 10))
+
+    draw_graph(G_uni, cent_uni, f"Unigram ({metric_name})", ax[0])
+    draw_graph(G_bi, cent_bi, f"Bigram ({metric_name})", ax[1])
+
+    st.pyplot(fig)
