@@ -3,17 +3,18 @@ import nltk
 import networkx as nx
 import matplotlib.pyplot as plt
 import numpy as np
-
 from nltk.tokenize import sent_tokenize, word_tokenize
 from nltk.util import ngrams
 from nltk.corpus import stopwords, words as nltk_words
 
-nltk.download('punkt')
-nltk.download('stopwords')
-nltk.download('words')
+# ===== NLTK FIX =====
+nltk.download("punkt")
+nltk.download("punkt_tab")
+nltk.download("stopwords")
+nltk.download("words")
 
-STOP_WORDS = set(stopwords.words('english'))
-ENGLISH_WORDS = set(nltk_words.words('en'))
+STOP_WORDS = set(stopwords.words("english"))
+ENGLISH_WORDS = set(nltk_words.words("en"))
 
 def preprocess_sentence(s):
     tokens = word_tokenize(s)
@@ -26,22 +27,18 @@ def preprocess_sentence(s):
 st.title("📈 Unigram vs Bigram — Centrality Comparison")
 
 if "pdf_text" not in st.session_state:
-    st.warning("Upload PDF terlebih dahulu di halaman utama.")
+    st.warning("Silakan upload PDF di halaman utama.")
     st.stop()
 
-# =====================
-# PREPROCESS
-# =====================
+# ===== PREPROCESS =====
 tokens = []
 for s in sent_tokenize(st.session_state["pdf_text"]):
     tokens.extend(preprocess_sentence(s))
 
-# =====================
-# GRAPHS
-# =====================
+# ===== GRAPHS =====
 G_uni = nx.Graph()
-for i in range(len(tokens)-1):
-    G_uni.add_edge(tokens[i], tokens[i+1])
+for i in range(len(tokens) - 1):
+    G_uni.add_edge(tokens[i], tokens[i + 1])
 
 G_bi = nx.Graph()
 for w1, w2 in ngrams(tokens, 2):
@@ -50,30 +47,26 @@ for w1, w2 in ngrams(tokens, 2):
     else:
         G_bi.add_edge(w1, w2, weight=1)
 
-# =====================
-# CENTRALITY
-# =====================
-centrality_option = st.sidebar.radio(
-    "Centrality untuk ukuran node",
+# ===== SIDEBAR TOGGLE =====
+metric = st.sidebar.radio(
+    "Centrality Metric",
     ["PageRank", "Degree", "Betweenness"]
 )
 
 def get_centrality(G):
-    if centrality_option == "PageRank":
+    if metric == "PageRank":
         return nx.pagerank(G, weight="weight")
-    if centrality_option == "Degree":
+    if metric == "Degree":
         return nx.degree_centrality(G)
     return nx.betweenness_centrality(G, weight="weight")
 
 cent_uni = get_centrality(G_uni)
 cent_bi = get_centrality(G_bi)
 
-# =====================
-# VISUALIZATION
-# =====================
-st.subheader("🔀 Perbandingan Unigram vs Bigram")
+# ===== VISUAL =====
+st.subheader("🔀 Unigram vs Bigram Comparison")
 
-fig, ax = plt.subplots(1, 2, figsize=(22,10))
+fig, ax = plt.subplots(1, 2, figsize=(22, 10))
 
 for graph, cent, axis, title in [
     (G_uni, cent_uni, ax[0], "Unigram"),
@@ -85,8 +78,7 @@ for graph, cent, axis, title in [
 
     nx.draw_networkx_nodes(graph, pos, node_size=sizes, alpha=0.8, ax=axis)
     nx.draw_networkx_edges(graph, pos, alpha=0.15, ax=axis)
-
-    axis.set_title(f"{title} Graph ({centrality_option})")
+    axis.set_title(f"{title} ({metric})")
     axis.axis("off")
 
 st.pyplot(fig)
