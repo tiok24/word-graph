@@ -1,26 +1,23 @@
 import streamlit as st
 import fitz
-import nltk
 
-# ===== NLTK FIX (WAJIB) =====
-nltk.download("punkt")
-nltk.download("punkt_tab")
+st.set_page_config(layout="wide")
+st.title("📚 NLP Word Graph Application")
 
-st.set_page_config(page_title="NLP Word Graph App", layout="wide")
-st.title("📚 NLP Word Graph Analysis")
+uploaded_file = st.file_uploader("📄 Upload PDF (sekali untuk semua halaman)", type=["pdf"])
 
-uploaded_file = st.file_uploader(
-    "📄 Upload PDF (digunakan untuk semua halaman)",
-    type=["pdf"]
-)
-
-if uploaded_file:
+if uploaded_file and "pdf_text" not in st.session_state:
     doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
-    st.session_state["pdf_text"] = "".join([p.get_text() for p in doc])
-    st.success("PDF berhasil dimuat & tersinkron ke semua halaman")
+    st.session_state["pdf_text"] = "".join(p.get_text() for p in doc)
+    st.success("PDF berhasil dimuat & disimpan")
+
+if "pdf_text" in st.session_state:
+    st.sidebar.success("PDF loaded")
+else:
+    st.sidebar.warning("Upload PDF terlebih dahulu")
 
 st.markdown("""
-Gunakan **sidebar** untuk berpindah halaman:
+Gunakan sidebar untuk berpindah halaman:
 - 📊 Word Graph NLP
-- 📈 Unigram vs Bigram
+- 📈 Bi vs Uni
 """)
